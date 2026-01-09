@@ -14,11 +14,13 @@ YESNO = ["No", "Yes"]
 
 left, right = st.columns([1, 1], gap="large")
 
+# Initialize defaults so variables exist before submit
+payload = {}
+
 with left:
     st.subheader("Patient Intake Form")
 
     with st.form("intake_form", clear_on_submit=False):
-        # Put the button early so you can always reach it
         submitted = st.form_submit_button("Generate Intake JSON")
 
         with st.expander("Basics", expanded=True):
@@ -80,8 +82,6 @@ with left:
             "drugs": drugs,
             "additional_notes": additional_notes.strip()
         }
-    else:
-        st.info("Fill the form and click **Generate Intake JSON**.")
 
 with right:
     st.subheader("Clinician Summary (Next Step)")
@@ -91,3 +91,4 @@ with right:
         st.json(payload)
     else:
         st.info("Fill the form and click **Generate Intake JSON**.")
+
