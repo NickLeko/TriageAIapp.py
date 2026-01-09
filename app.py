@@ -3,10 +3,26 @@ import streamlit as st
 from openai import OpenAI
 
 st.set_page_config(page_title="TriageAI MVP", layout="wide")
-st.title("TriageAI — Primary Care Pre-Visit Intake (MVP)")
 
 # ----------------------------
-# OpenAI client (from Streamlit Secrets)
+# Top-Level Disclaimer Banner
+# ----------------------------
+st.markdown(
+    """
+    <div style="background-color: #ffcccc; padding: 15px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #ff0000;">
+        <strong>🚨 IMPORTANT DISCLAIMER</strong><br>
+        This is an <strong>educational prototype only</strong>. It is <strong>NOT medical advice, diagnosis, or treatment</strong>. 
+        All outputs are AI-generated from user input and may contain errors or omissions. 
+        Always consult a licensed healthcare provider for medical concerns.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.title("TriageAI — Primary Care Pre-Visit Intake Summarizer (MVP)")
+
+# ----------------------------
+# OpenAI client
 # ----------------------------
 def get_client() -> OpenAI:
     api_key = st.secrets.get("OPENAI_API_KEY")
@@ -65,13 +81,10 @@ CLINICIAN_SUMMARY_SCHEMA = {
 
 @st.cache_data(show_spinner=False)
 def generate_clinician_summary(payload: dict) -> dict:
-    """
-    Cached to avoid repeat charges when re-running Streamlit with the same payload.
-    """
     client = get_client()
 
     response = client.responses.create(
-        model="gpt-4.1-mini",  # stable + cheap for MVP; swap later if you want
+        model="gpt-4o-mini",  # Updated to current common cheap/strong model
         input=[
             {"role": "system", "content": SYSTEM_INSTRUCTIONS},
             {
@@ -97,7 +110,7 @@ def generate_clinician_summary(payload: dict) -> dict:
     return json.loads(raw)
 
 # ----------------------------
-# Intake form
+# Common options
 # ----------------------------
 COMMON_CONDITIONS = [
     "Hypertension", "Diabetes", "Asthma", "Depression/Anxiety",
@@ -108,16 +121,21 @@ ALCOHOL_OPTIONS = ["None", "Occasional", "Weekly", "Daily"]
 SYMPTOM_TREND_OPTIONS = ["Better", "Worse", "Unchanged", "Fluctuating", "Not sure"]
 YESNO = ["No", "Yes"]
 
+# ----------------------------
+# Layout
+# ----------------------------
 left, right = st.columns([1, 1], gap="large")
 
 payload = {}
-submitted = False
-
 with left:
     st.subheader("Patient Intake Form")
 
     with st.form("intake_form", clear_on_submit=False):
-        submitted = st.form_submit_button("Generate Clinician Summary")
+        # Consent checkbox (required)
+        consent = st.checkbox(
+            "I understand this is a prototype for demonstration purposes only and does not provide medical advice.",
+            value=False
+        )
 
         with st.expander("Basics", expanded=True):
             age = st.number_input("Age", min_value=0, max_value=120, value=25, step=1)
@@ -157,6 +175,9 @@ with left:
                 height=80
             )
 
+        submitted = st.form_submit_button("Generate Clinician Summary")
+
+        # Build payload
         pmh = [c for c in conditions if c != "Other"]
         if other_conditions.strip():
             pmh.append(other_conditions.strip())
@@ -182,39 +203,28 @@ with right:
     st.subheader("Clinician Summary")
 
     if not submitted:
-        st.info("Fill the form and click **Generate Clinician Summary**.")
+        st.info("Fill the form, acknowledge the disclaimer, and click **Generate Clinician Summary**.")
     else:
-        if not payload.get("reason_for_visit"):
+        if not consent:
+            st.error("Please acknowledge the disclaimer checkbox before generating a summary.")
+        elif not payload.get("reason_for_visit"):
             st.error("Please enter the main reason for visit before generating a summary.")
-            st.json(payload)
         else:
             st.caption("Intake payload (debug)")
-            st.json(payload)
+            with st.expander("View raw payload"):
+                st.json(payload)
 
             with st.spinner("Generating clinician summary..."):
                 try:
                     summary = generate_clinician_summary(payload)
 
-                    st.markdown("### Clinical Summary")
-                    st.write(summary["clinical_summary"])
+                    # Build full markdown summary for download
+                    full_markdown = f"""
+# TriageAI Pre-Visit Summary
 
-                    st.markdown("### Structured Data")
-                    st.json(summary["structured_data"])
+### Clinical Summary
+{summary["clinical_summary"]}
 
-                    st.markdown("### Items to Clarify")
-                    if summary["items_to_clarify"]:
-                        st.write(summary["items_to_clarify"])
-                    else:
-                        st.write(["None"])
-
-                    st.markdown("### Data Quality Notes")
-                    if summary["data_quality_notes"]:
-                        st.write(summary["data_quality_notes"])
-                    else:
-                        st.write(["None"])
-
-                    st.caption(summary["disclaimer"])
-
-                except Exception as e:
-                    st.error("LLM call failed. See error details below.")
-                    st.exception(e)
+### Structured Data
+```json
+{json.dumps(summary["structured_data"], indent=2)}
