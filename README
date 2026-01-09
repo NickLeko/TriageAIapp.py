@@ -1,0 +1,92 @@
+# TriageAI — Primary Care Pre-Visit Intake Summarizer (MVP)
+
+TriageAI is a lightweight AI-powered prototype that summarizes patient-reported pre-visit intake information into concise, clinician-friendly documentation for primary care visits.
+
+The goal is to reduce time spent on repetitive intake questions while preserving clinical judgment, safety, and human oversight.
+
+---
+
+## Problem
+
+In primary care, clinicians often spend valuable visit time reviewing basic intake information that could have been collected and summarized beforehand. This leads to:
+- Reduced face-to-face time for complex issues
+- Repetitive questioning
+- Documentation burden
+- Lower patient and clinician satisfaction
+
+---
+
+## Solution
+
+TriageAI allows patients to complete a structured intake form prior to their appointment. An AI model then:
+- Synthesizes the information into a neutral, clinician-ready summary
+- Highlights key medical history and social factors
+- Flags missing or unclear information for follow-up
+- Avoids diagnoses, recommendations, or clinical decision-making
+
+The output is designed to support — not replace — clinician judgment.
+
+---
+
+## What the AI Does (and Does Not Do)
+
+### ✅ The AI:
+- Summarizes patient-reported information
+- Uses conservative, clinician-appropriate language
+- Flags missing or unclear details
+- Produces structured, predictable output
+- Maintains clear safety boundaries
+
+### ❌ The AI does NOT:
+- Provide medical advice
+- Make diagnoses
+- Suggest treatments
+- Score risk or triage urgency
+- Replace clinical decision-making
+
+---
+
+## Example Output
+
+> *“The patient is a 25-year-old female presenting for obesity management. She has a history of diabetes and hypertension. The onset of obesity was noted 3 years ago, with a reported worsening trend. Current medication includes Ozempic. The patient reports daily alcohol intake and a history of vaping. No allergies were reported.”*
+
+---
+
+## Intended Users
+
+- Primary care clinicians
+- Clinical operations teams
+- Product managers exploring AI workflows in healthcare
+- Interviewers evaluating applied AI judgment in regulated domains
+
+---
+
+## Design Principles
+
+- **Safety-first:** conservative language, no clinical decisions
+- **Transparency:** all outputs are clearly labeled as AI-generated
+- **Clinician control:** AI assists documentation, not care decisions
+- **Scope discipline:** focused on intake summarization only
+
+---
+
+## Tech Stack
+
+- **Frontend:** Streamlit
+- **AI Model:** OpenAI (structured JSON outputs)
+- **Language:** Python
+- **Deployment:** Streamlit Community Cloud
+
+---
+
+## Disclaimer
+
+This project is an educational prototype only.  
+It is not intended for clinical use, diagnosis, or treatment.  
+All outputs are AI-generated from patient-reported information and have not been verified by a clinician.
+
+---
+
+## Status
+
+This project is intentionally scoped as an MVP and is considered feature-complete for demonstration purposes.
