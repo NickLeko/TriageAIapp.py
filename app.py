@@ -4,9 +4,7 @@ from openai import OpenAI
 
 st.set_page_config(page_title="TriageAI MVP", layout="wide")
 
-# ----------------------------
 # Top-Level Disclaimer Banner
-# ----------------------------
 st.markdown(
     """
     <div style="background-color: #ffcccc; padding: 15px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #ff0000;">
@@ -21,9 +19,6 @@ st.markdown(
 
 st.title("TriageAI — Primary Care Pre-Visit Intake Summarizer (MVP)")
 
-# ----------------------------
-# OpenAI client
-# ----------------------------
 def get_client() -> OpenAI:
     api_key = st.secrets.get("OPENAI_API_KEY")
     if not api_key:
@@ -36,13 +31,8 @@ SYSTEM_INSTRUCTIONS = (
     "Summarize patient-reported pre-visit intake information into concise, neutral, non-diagnostic clinical language. "
     "Do NOT provide medical advice, diagnoses, risk scores, or treatment recommendations. "
     "Do NOT add facts not provided. Flag missing/unclear details. "
-    "Assume all information is patient-reported and unverified."
-)
-
-USER_PROMPT_TEMPLATE = (
-    "Return ONLY valid JSON that EXACTLY matches this schema (no extra text, no markdown):\n"
-    "{schema}\n\n"
-    "Summarize this intake payload:\n\n{payload}"
+    "Assume all information is patient-reported and unverified. "
+    "Always include a disclaimer: 'This is AI-generated from patient-reported information and has not been verified by a clinician.'"
 )
 
 CLINICIAN_SUMMARY_SCHEMA = {
@@ -58,7 +48,7 @@ CLINICIAN_SUMMARY_SCHEMA = {
                 "past_medical_history": {"type": "array", "items": {"type": "string"}},
                 "medications": {"type": "array", "items": {"type": "string"}},
                 "allergies": {"type": "array", "items": {"type": "string"}},
-                "social_history_flags": {"type": "array", "items": {"type": "string"}},
+                "social_history_flags": {"type": "array", "items": {"type": "string"}}
             },
             "required": ["reason_for_visit", "duration", "symptom_trend", "past_medical_history", "medications", "allergies", "social_history_flags"],
             "additionalProperties": False
@@ -74,98 +64,64 @@ CLINICIAN_SUMMARY_SCHEMA = {
 @st.cache_data(show_spinner=False)
 def generate_clinician_summary(payload: dict) -> dict:
     client = get_client()
-
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": SYSTEM_INSTRUCTIONS},
-            {"role": "user", "content": USER_PROMPT_TEMPLATE.format(
-                schema=json.dumps(CLINICIAN_SUMMARY_SCHEMA, indent=2),
-                payload=json.dumps(payload, ensure_ascii=False, indent=2)
-            )}
+            {"role": "user", "content": f"Return ONLY valid JSON matching this schema exactly:\n{json.dumps(CLINICIAN_SUMMARY_SCHEMA, indent=2)}\n\nPayload:\n{json.dumps(payload, indent=2)}"}
         ],
         response_format={"type": "json_object"},
-        temperature=0.3  # Low for consistency
+        temperature=0.2
     )
+    raw = response.choices[0].message.content.strip()
+    return json.loads(raw)
 
-    raw_content = response.choices[0].message.content
-    if not raw_content:
-        raise ValueError("Empty response from model")
-    return json.loads(raw_content)
-
-# ----------------------------
-# Common options (same as before)
-# ----------------------------
+# Options
 COMMON_CONDITIONS = ["Hypertension", "Diabetes", "Asthma", "Depression/Anxiety", "Hypothyroidism", "Hyperlipidemia", "GERD", "COPD", "Chronic kidney disease", "Other"]
 ALCOHOL_OPTIONS = ["None", "Occasional", "Weekly", "Daily"]
 SYMPTOM_TREND_OPTIONS = ["Better", "Worse", "Unchanged", "Fluctuating", "Not sure"]
 YESNO = ["No", "Yes"]
 
-# ----------------------------
-# Layout
-# ----------------------------
 left, right = st.columns([1, 1], gap="large")
 
-payload = {}
 with left:
     st.subheader("Patient Intake Form")
-
     with st.form("intake_form"):
         consent = st.checkbox(
             "I understand this is a prototype for demonstration purposes only and does not provide medical advice.",
             value=False
         )
 
-        # (Form fields unchanged from previous revision for brevity—copy your existing ones here)
-        # ... [insert your full form code from original/previous here] ...
+        with st.expander("Basics", expanded=True):
+            age = st.number_input("Age", min_value=0, max_value=120, value=25)
+            sex_at_birth = st.selectbox("Sex at birth", ["Female", "Male", "Intersex", "Prefer not to say"])
+            height = st.text_input("Height (optional)", placeholder="e.g., 5'6\" or 168 cm")
+            weight = st.text_input("Weight (optional)", placeholder="e.g., 160 lb or 73 kg")
 
-        submitted = st.form_submit_button("Generate Clinician Summary")
+        with st.expander("Visit Context", expanded=True):
+            reason_for_visit = st.text_area("Main reason for visit today?", height=100)
+            symptom_start = st.text_input("When did this start?", placeholder="e.g., 3 days ago")
+            symptom_trend = st.selectbox("Symptom trend?", SYMPTOM_TREND_OPTIONS)
 
-        # (Payload building unchanged—use your existing logic)
+        with st.expander("Medical History", expanded=False):
+            conditions = st.multiselect("Diagnosed conditions", COMMON_CONDITIONS)
+            other_conditions = st.text_input("Other conditions" if "Other" in conditions else "")
+            medications = st.text_area("Current medications", placeholder="List with doses if known", height=80)
+            has_allergies = st.selectbox("Allergies?", YESNO)
+            allergies = st.text_area("List allergies", height=70) if has_allergies == "Yes" else ""
 
-with right:
-    st.subheader("Clinician Summary")
+        with st.expander("Social History", expanded=False):
+            smoking = st.selectbox("Smoke or vape?", ["No", "Yes - smoke", "Yes - vape", "Yes - both"])
+            alcohol = st.selectbox("Alcohol frequency?", ALCOHOL_OPTIONS)
+            drugs = st.selectbox("Recreational drugs?", YESNO)
 
-    if not submitted:
-        st.info("Fill the form, acknowledge the disclaimer, and click Generate.")
-    elif not consent:
-        st.error("Please acknowledge the disclaimer checkbox.")
-    elif not payload.get("reason_for_visit"):
-        st.error("Main reason for visit required.")
-    else:
-        st.caption("Intake payload (debug)")
-        with st.expander("View raw payload"):
-            st.json(payload)
+        with st.expander("Anything Else", expanded=False):
+            additional_notes = st.text_area("Additional notes?", height=80)
 
-        with st.spinner("Generating..."):
-            try:
-                summary = generate_clinician_summary(payload)
+        submitted = st.form_submit_button("Generate Summary")
 
-                full_markdown = f"""# TriageAI Summary\n\n### Clinical Summary\n{summary['clinical_summary']}\n\n### Structured Data\n```json\n{json.dumps(summary['structured_data'], indent=2)}\n```\n\n### Items to Clarify\n- {'\n- '.join(summary['items_to_clarify']) if summary['items_to_clarify'] else 'None'}\n\n### Data Quality Notes\n- {'\n- '.join(summary['data_quality_notes']) if summary['data_quality_notes'] else 'None'}\n\n**{summary['disclaimer']}**"""
-
-                st.success("Generated!")
-
-                st.markdown("### 📋 Clinical Summary")
-                st.markdown(summary["clinical_summary"])
-
-                st.markdown("### 🗂️ Structured Data")
-                st.json(summary["structured_data"])
-
-                st.markdown("### ❓ Items to Clarify")
-                st.write("- " + "\n- ".join(summary["items_to_clarify"]) if summary["items_to_clarify"] else "None")
-
-                st.markdown("### ⚠️ Data Quality Notes")
-                st.write("- " + "\n- ".join(summary["data_quality_notes"]) if summary["data_quality_notes"] else "None")
-
-                st.markdown(f"**{summary['disclaimer']}**")
-
-                st.markdown("### 📥 Downloads")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button("Download Markdown", full_markdown, "triage_summary.md", "text/markdown")
-                with col2:
-                    st.download_button("Download JSON", json.dumps(summary["structured_data"], indent=2), "structured_data.json", "application/json")
-
-            except Exception as e:
-                st.error("Generation failed—check API key or try again.")
-                st.exception(e)
+        # Build payload
+        pmh = [c for c in conditions if c != "Other"] + ([other_conditions.strip()] if other_conditions else [])
+        payload = {
+            "age": age,
+            "sex_at_birth": sex
