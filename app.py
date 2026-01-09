@@ -8,7 +8,7 @@ st.markdown(
     <style>
         div[data-testid="column"]:first-of-type {
             overflow-y: scroll !important;
-            max-height: calc(500vh - 200px) !important;  # Increased height, subtracts space for header/banner
+            max-height: calc(100vh - 200px) !important;  # Increased height, subtracts space for header/banner
             padding-right: 20px !important;  # More space for scrollbar
             display: flex !important;
             flex-direction: column !important;
