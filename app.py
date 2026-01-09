@@ -8,7 +8,7 @@ st.markdown(
     <style>
         [data-testid="column"]:nth-of-type(1) {
             overflow-y: auto;
-            max-height: 80vh;  /* Adjust to 90vh or 100vh if needed for more space */
+            max-height: 100vh;  /* Adjust to 90vh or 100vh if needed for more space */
             padding-right: 10px;  /* Optional: scrollbar space */
         }
     </style>
