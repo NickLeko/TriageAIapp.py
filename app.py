@@ -2,11 +2,10 @@ import json
 import streamlit as st
 from openai import OpenAI
 
-# ✅ MUST be the first Streamlit call
 st.set_page_config(page_title="TriageAI MVP", layout="wide")
 
 # ----------------------------
-# Top disclaimer banner
+# Banner disclaimer
 # ----------------------------
 st.markdown(
     """
@@ -32,7 +31,6 @@ def get_client() -> OpenAI:
         st.stop()
     return OpenAI(api_key=api_key)
 
-
 SYSTEM_INSTRUCTIONS = (
     "You are a clinical documentation assistant supporting primary care clinicians. "
     "Summarize patient-reported pre-visit intake information into concise, neutral, non-diagnostic clinical language. "
@@ -42,9 +40,6 @@ SYSTEM_INSTRUCTIONS = (
     "Always include a disclaimer: 'This is AI-generated from patient-reported information and has not been verified by a clinician.'"
 )
 
-# ----------------------------
-# Strict output schema (Structured Outputs)
-# ----------------------------
 CLINICIAN_SUMMARY_SCHEMA = {
     "type": "object",
     "properties": {
@@ -85,15 +80,9 @@ CLINICIAN_SUMMARY_SCHEMA = {
     "additionalProperties": False,
 }
 
-
 @st.cache_data(show_spinner=False)
 def generate_clinician_summary(payload: dict) -> dict:
-    """
-    Cached to avoid repeat charges if the same payload is re-run.
-    Uses Structured Outputs to enforce schema.
-    """
     client = get_client()
-
     response = client.responses.create(
         model="gpt-4o-mini",
         input=[
@@ -115,208 +104,187 @@ def generate_clinician_summary(payload: dict) -> dict:
             }
         },
     )
-
-    raw = response.output_text
-    return json.loads(raw)
-
+    return json.loads(response.output_text)
 
 # ----------------------------
-# Form options
+# Options
 # ----------------------------
 COMMON_CONDITIONS = [
-    "Hypertension",
-    "Diabetes",
-    "Asthma",
-    "Depression/Anxiety",
-    "Hypothyroidism",
-    "Hyperlipidemia",
-    "GERD",
-    "COPD",
-    "Chronic kidney disease",
-    "Other",
+    "Hypertension", "Diabetes", "Asthma", "Depression/Anxiety",
+    "Hypothyroidism", "Hyperlipidemia", "GERD", "COPD",
+    "Chronic kidney disease", "Other"
 ]
 ALCOHOL_OPTIONS = ["None", "Occasional", "Weekly", "Daily"]
 SYMPTOM_TREND_OPTIONS = ["Better", "Worse", "Unchanged", "Fluctuating", "Not sure"]
 YESNO = ["No", "Yes"]
 
 # ----------------------------
-# Layout
+# Sidebar form (native scrolling)
 # ----------------------------
-left, right = st.columns([1, 1], gap="large")
-
-# These need defaults so right column can render on first load
 payload = {}
 submitted = False
 consent = False
 
-with left:
-    st.subheader("Patient Intake Form")
+with st.sidebar:
+    st.header("Patient Intake Form")
 
-    # ✅ Scrollable form container (no CSS hacks)
-    # Adjust height if you want more/less vertical space for the form.
-    form_wrap = st.container(height=720, border=True)
+    with st.form("intake_form", clear_on_submit=False):
+        consent = st.checkbox(
+            "I understand this is a prototype for demonstration purposes only and does not provide medical advice.",
+            value=False,
+        )
 
-    with form_wrap:
-        with st.form("intake_form", clear_on_submit=False):
-            consent = st.checkbox(
-                "I understand this is a prototype for demonstration purposes only and does not provide medical advice.",
-                value=False,
+        st.subheader("Basics")
+        age = st.number_input("Age", min_value=0, max_value=120, value=25)
+        sex_at_birth = st.selectbox("Sex at birth", ["Female", "Male", "Intersex", "Prefer not to say"])
+        height = st.text_input("Height (optional)", placeholder='e.g., 5\'6" or 168 cm')
+        weight = st.text_input("Weight (optional)", placeholder="e.g., 160 lb or 73 kg")
+
+        st.subheader("Visit Context")
+        reason_for_visit = st.text_area("Main reason for visit today?", height=90)
+        symptom_start = st.text_input("When did this start?", placeholder="e.g., 3 days ago")
+        symptom_trend = st.selectbox("Symptom trend?", SYMPTOM_TREND_OPTIONS)
+
+        st.subheader("Medical History")
+        conditions = st.multiselect("Diagnosed conditions", COMMON_CONDITIONS)
+        other_conditions = ""
+        if "Other" in conditions:
+            other_conditions = st.text_input("Other conditions", placeholder="e.g., migraines, IBS")
+
+        medications = st.text_area(
+            "Current medications",
+            placeholder="Enter one per line. Include doses if known.",
+            height=90,
+        )
+
+        has_allergies = st.selectbox("Allergies?", YESNO)
+        allergies = ""
+        if has_allergies == "Yes":
+            allergies = st.text_area(
+                "List allergies",
+                placeholder="Enter one per line (medication/food/other).",
+                height=80,
             )
 
-            with st.expander("Basics", expanded=True):
-                age = st.number_input("Age", min_value=0, max_value=120, value=25)
-                sex_at_birth = st.selectbox(
-                    "Sex at birth", ["Female", "Male", "Intersex", "Prefer not to say"]
+        st.subheader("Social History")
+        smoking = st.selectbox("Smoke or vape?", ["No", "Yes - smoke", "Yes - vape", "Yes - both"])
+        alcohol = st.selectbox("Alcohol frequency?", ALCOHOL_OPTIONS)
+        drugs = st.selectbox("Recreational drugs?", YESNO)
+
+        st.subheader("Anything Else")
+        additional_notes = st.text_area("Additional notes?", height=90)
+
+        submitted = st.form_submit_button("Generate Summary")
+
+        # Build payload
+        pmh = [c for c in conditions if c != "Other"]
+        if other_conditions.strip():
+            pmh.append(other_conditions.strip())
+
+        med_list = [m.strip() for m in medications.splitlines() if m.strip()]
+        allergy_list = [a.strip() for a in allergies.splitlines() if a.strip()] if allergies else []
+
+        social_flags = []
+        if smoking != "No":
+            social_flags.append(smoking)
+        if alcohol != "None":
+            social_flags.append(f"Alcohol: {alcohol}")
+        if drugs == "Yes":
+            social_flags.append("Recreational drugs")
+
+        payload = {
+            "age": str(age),
+            "sex_at_birth": sex_at_birth,
+            "height": height.strip() or "Not provided",
+            "weight": weight.strip() or "Not provided",
+            "reason_for_visit": reason_for_visit.strip(),
+            "symptom_start": symptom_start.strip() or "Not provided",
+            "symptom_trend": symptom_trend,
+            "past_medical_history": pmh,
+            "medications": med_list,
+            "allergies": allergy_list,
+            "social_history_flags": social_flags,
+            "additional_notes": additional_notes.strip(),
+        }
+
+# ----------------------------
+# Main output
+# ----------------------------
+st.subheader("Clinician Summary")
+
+if not submitted:
+    st.info("Fill the form in the sidebar, acknowledge consent, then click **Generate Summary**.")
+elif not consent:
+    st.error("Please acknowledge the consent checkbox before generating a summary.")
+    with st.expander("Raw payload (debug)"):
+        st.json(payload)
+elif not payload.get("reason_for_visit"):
+    st.error("Reason for visit is required.")
+    with st.expander("Raw payload (debug)"):
+        st.json(payload)
+else:
+    with st.expander("Raw payload (debug)"):
+        st.json(payload)
+
+    with st.spinner("Generating..."):
+        try:
+            summary = generate_clinician_summary(payload)
+
+            full_md = (
+                "# Clinical Summary\n\n"
+                f"{summary['clinical_summary']}\n\n"
+                "## Structured Data\n"
+                "```json\n"
+                f"{json.dumps(summary['structured_data'], indent=2)}\n"
+                "```\n\n"
+                "## Items to Clarify\n"
+                + ("\n".join([f"- {x}" for x in summary["items_to_clarify"]]) if summary["items_to_clarify"] else "- None")
+                + "\n\n## Data Quality Notes\n"
+                + ("\n".join([f"- {x}" for x in summary["data_quality_notes"]]) if summary["data_quality_notes"] else "- None")
+                + f"\n\n**{summary['disclaimer']}**\n"
+            )
+
+            st.success("Done!")
+
+            st.markdown("### 📋 Clinical Summary")
+            st.write(summary["clinical_summary"])
+
+            st.markdown("### 🗂️ Structured Data")
+            st.json(summary["structured_data"])
+
+            st.markdown("### ❓ Items to Clarify")
+            if summary["items_to_clarify"]:
+                for item in summary["items_to_clarify"]:
+                    st.write(f"- {item}")
+            else:
+                st.write("None")
+
+            st.markdown("### ⚠️ Data Quality Notes")
+            if summary["data_quality_notes"]:
+                for note in summary["data_quality_notes"]:
+                    st.write(f"- {note}")
+            else:
+                st.write("None")
+
+            st.markdown(f"**{summary['disclaimer']}**")
+
+            st.markdown("### 📥 Downloads")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.download_button(
+                    "Download Markdown",
+                    data=full_md,
+                    file_name="summary.md",
+                    mime="text/markdown",
                 )
-                height = st.text_input("Height (optional)", placeholder='e.g., 5\'6" or 168 cm')
-                weight = st.text_input("Weight (optional)", placeholder="e.g., 160 lb or 73 kg")
-
-            with st.expander("Visit Context", expanded=True):
-                reason_for_visit = st.text_area("Main reason for visit today?", height=100)
-                symptom_start = st.text_input("When did this start?", placeholder="e.g., 3 days ago")
-                symptom_trend = st.selectbox("Symptom trend?", SYMPTOM_TREND_OPTIONS)
-
-            with st.expander("Medical History", expanded=False):
-                conditions = st.multiselect("Diagnosed conditions", COMMON_CONDITIONS)
-                other_conditions = ""
-                if "Other" in conditions:
-                    other_conditions = st.text_input("Other conditions", placeholder="e.g., migraines, IBS")
-
-                medications = st.text_area(
-                    "Current medications",
-                    placeholder="Enter one per line. Include doses if known.",
-                    height=90,
+            with c2:
+                st.download_button(
+                    "Download JSON",
+                    data=json.dumps(summary["structured_data"], indent=2),
+                    file_name="data.json",
+                    mime="application/json",
                 )
 
-                has_allergies = st.selectbox("Allergies?", YESNO)
-                allergies = ""
-                if has_allergies == "Yes":
-                    allergies = st.text_area(
-                        "List allergies",
-                        placeholder="Enter one per line (medication/food/other).",
-                        height=80,
-                    )
-
-            with st.expander("Social History", expanded=False):
-                smoking = st.selectbox(
-                    "Smoke or vape?", ["No", "Yes - smoke", "Yes - vape", "Yes - both"]
-                )
-                alcohol = st.selectbox("Alcohol frequency?", ALCOHOL_OPTIONS)
-                drugs = st.selectbox("Recreational drugs?", YESNO)
-
-            with st.expander("Anything Else", expanded=False):
-                additional_notes = st.text_area("Additional notes?", height=90)
-
-            submitted = st.form_submit_button("Generate Summary")
-
-            # ---------- Build payload ----------
-            pmh = [c for c in conditions if c != "Other"]
-            if other_conditions.strip():
-                pmh.append(other_conditions.strip())
-
-            med_list = [m.strip() for m in medications.splitlines() if m.strip()]
-            allergy_list = [a.strip() for a in allergies.splitlines() if a.strip()] if allergies else []
-
-            social_flags = []
-            if smoking != "No":
-                social_flags.append(smoking)
-            if alcohol != "None":
-                social_flags.append(f"Alcohol: {alcohol}")
-            if drugs == "Yes":
-                social_flags.append("Recreational drugs")
-
-            payload = {
-                "age": str(age),
-                "sex_at_birth": sex_at_birth,
-                "height": height.strip() or "Not provided",
-                "weight": weight.strip() or "Not provided",
-                "reason_for_visit": reason_for_visit.strip(),
-                "symptom_start": symptom_start.strip() or "Not provided",
-                "symptom_trend": symptom_trend,
-                "past_medical_history": pmh,
-                "medications": med_list,
-                "allergies": allergy_list,
-                "social_history_flags": social_flags,
-                "additional_notes": additional_notes.strip(),
-            }
-
-with right:
-    st.subheader("Clinician Summary")
-
-    if not submitted:
-        st.info("Complete the form, acknowledge consent, then click **Generate Summary**.")
-    elif not consent:
-        st.error("Please acknowledge the consent checkbox before generating a summary.")
-        with st.expander("Raw payload (debug)"):
-            st.json(payload)
-    elif not payload.get("reason_for_visit"):
-        st.error("Reason for visit is required.")
-        with st.expander("Raw payload (debug)"):
-            st.json(payload)
-    else:
-        with st.expander("Raw payload (debug)"):
-            st.json(payload)
-
-        with st.spinner("Generating..."):
-            try:
-                summary = generate_clinician_summary(payload)
-
-                # Markdown export (for downloads)
-                full_md = (
-                    "# Clinical Summary\n\n"
-                    f"{summary['clinical_summary']}\n\n"
-                    "## Structured Data\n"
-                    "```json\n"
-                    f"{json.dumps(summary['structured_data'], indent=2)}\n"
-                    "```\n\n"
-                    "## Items to Clarify\n"
-                    + ("\n".join([f"- {x}" for x in summary["items_to_clarify"]]) if summary["items_to_clarify"] else "- None")
-                    + "\n\n## Data Quality Notes\n"
-                    + ("\n".join([f"- {x}" for x in summary["data_quality_notes"]]) if summary["data_quality_notes"] else "- None")
-                    + f"\n\n**{summary['disclaimer']}**\n"
-                )
-
-                st.success("Done!")
-
-                st.markdown("### 📋 Clinical Summary")
-                st.write(summary["clinical_summary"])
-
-                st.markdown("### 🗂️ Structured Data")
-                st.json(summary["structured_data"])
-
-                st.markdown("### ❓ Items to Clarify")
-                if summary["items_to_clarify"]:
-                    for item in summary["items_to_clarify"]:
-                        st.write(f"- {item}")
-                else:
-                    st.write("None")
-
-                st.markdown("### ⚠️ Data Quality Notes")
-                if summary["data_quality_notes"]:
-                    for note in summary["data_quality_notes"]:
-                        st.write(f"- {note}")
-                else:
-                    st.write("None")
-
-                st.markdown(f"**{summary['disclaimer']}**")
-
-                st.markdown("### 📥 Downloads")
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.download_button(
-                        "Download Markdown",
-                        data=full_md,
-                        file_name="summary.md",
-                        mime="text/markdown",
-                    )
-                with c2:
-                    st.download_button(
-                        "Download JSON",
-                        data=json.dumps(summary["structured_data"], indent=2),
-                        file_name="data.json",
-                        mime="application/json",
-                    )
-
-            except Exception as e:
-                st.error("Generation failed — check your API key/billing or try again.")
-                st.exception(e)
+        except Exception as e:
+            st.error("Generation failed — check your API key/billing or try again.")
+            st.exception(e)
