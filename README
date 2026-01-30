@@ -2,7 +2,7 @@
 
 TriageAI is a lightweight AI-powered prototype that summarizes patient-reported pre-visit intake information into concise, clinician-friendly documentation for primary care visits.
 
-The goal is to reduce time spent on repetitive intake questions while preserving clinical judgment, safety, and human oversight.
+The goal is to reduce time spent on repetitive intake review while preserving clinical judgment, safety, and human oversight.
 
 ---
 
@@ -19,12 +19,12 @@ In primary care, clinicians often spend valuable visit time reviewing basic inta
 ## Solution
 
 TriageAI allows patients to complete a structured intake form prior to their appointment. An AI model then:
-- Synthesizes the information into a neutral, clinician-ready summary
-- Highlights key medical history and social factors
+- Synthesizes the information into neutral, clinician-ready summaries
+- Highlights relevant medical history and social factors
 - Flags missing or unclear information for follow-up
 - Avoids diagnoses, recommendations, or clinical decision-making
 
-The output is designed to support — not replace — clinician judgment.
+The output is designed to **support — not replace — clinician judgment**.
 
 ---
 
@@ -35,7 +35,7 @@ The output is designed to support — not replace — clinician judgment.
 - Uses conservative, clinician-appropriate language
 - Flags missing or unclear details
 - Produces structured, predictable output
-- Maintains clear safety boundaries
+- Maintains explicit safety boundaries
 
 ### ❌ The AI does NOT:
 - Provide medical advice
@@ -79,14 +79,23 @@ The output is designed to support — not replace — clinician judgment.
 
 ---
 
+## Data & Privacy Notes
+
+- This prototype is intended for **demonstration with synthetic or example data only**
+- Do **not** enter real patient identifiers or protected health information (PHI)
+- No data persistence or clinical system integration is implemented
+
+---
+
 ## Disclaimer
 
 This project is an educational prototype only.  
-It is not intended for clinical use, diagnosis, or treatment.  
+It is **not intended for clinical use**, diagnosis, or treatment.  
 All outputs are AI-generated from patient-reported information and have not been verified by a clinician.
 
 ---
 
-## Status
+## Project Status
 
-This project is intentionally scoped as an MVP and is considered feature-complete for demonstration purposes.
+This project is intentionally scoped as a **demonstration MVP** and is considered feature-complete for its purpose.  
+Further work (e.g., clinician evaluation, workflow integration, governance review) would be required for real-world deployment but is out of scope for this repository.
